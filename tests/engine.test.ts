@@ -324,7 +324,7 @@ describe("Meja Bundar chat engine, security, and relay", () => {
     expect(diskBytes.subarray(0, 4).toString("hex")).toBe("89504e47");
   });
 
-  it("enforces Relay mode single-use 8-char code, placeholder, answer, timeout, and disable", async () => {
+  it("enforces Relay mode reusable 8-char code for 30 min, placeholder, answer, timeout, and disable", async () => {
     const { code } = await createRelayCode();
     expect(code).toMatch(/^[A-Z2-9]{8}$/);
 
@@ -357,7 +357,7 @@ describe("Meja Bundar chat engine, security, and relay", () => {
       expect(pendingRes.requests).toHaveLength(1);
     }
 
-    // Answer fills placeholder and consumes code
+    // Answer fills placeholder WITHOUT consuming the code
     const ansRes = await submitRelayAnswer({
       code,
       answer: "Jawaban langsung dari Muse utama di chat utama.",
@@ -370,17 +370,34 @@ describe("Meja Bundar chat engine, security, and relay", () => {
       );
     }
 
-    // Reusing single-use code fails
-    const reuseRes = await getPendingRelayRequests(code);
-    expect(reuseRes.ok).toBe(false);
+    // Reusing the same code within 30 minutes still works for subsequent turns
+    db = await readDb();
+    expect(toPublicSettings(db.settings).relay.hasActiveCode).toBe(true);
+    await handleUserMessage("Pertanyaan kedua via relay", { awaitCompletion: true });
+    const reusePending = await getPendingRelayRequests(code);
+    expect(reusePending.ok).toBe(true);
+    if (reusePending.ok) {
+      expect(reusePending.requests).toHaveLength(1);
+    }
+    const ansRes2 = await submitRelayAnswer({
+      code,
+      answer: "Jawaban kedua memakai kode relay yang sama.",
+    });
+    expect(ansRes2.ok).toBe(true);
+    if (ansRes2.ok) {
+      expect(ansRes2.message.text).toBe("Jawaban kedua memakai kode relay yang sama.");
+    }
 
-    // Expired code (>30 min) rejected
-    const { code: code2 } = await createRelayCode();
-    const expiredPending = await getPendingRelayRequests(
-      code2,
-      Date.now() + RELAY_CODE_TTL_MS + 1000
-    );
+    // Expired code (>30 min) rejected for both pending & answer
+    const expiredAt = Date.now() + RELAY_CODE_TTL_MS + 1000;
+    const expiredPending = await getPendingRelayRequests(code, expiredAt);
     expect(expiredPending.ok).toBe(false);
+    const expiredAnswer = await submitRelayAnswer({
+      code,
+      answer: "Terlambat",
+      now: expiredAt,
+    });
+    expect(expiredAnswer.ok).toBe(false);
 
     // 10-minute pending request timeout
     await handleUserMessage("Pesan yang akan timeout", { awaitCompletion: true });

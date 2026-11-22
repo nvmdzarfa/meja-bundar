@@ -983,9 +983,10 @@ export function SettingsModal({
                   7. Relay ke Muse Utama
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-[#3F3F46]">
-                  Sambungan manual berbasis kode 8 karakter sekali pakai (berlaku 30 menit), bukan
-                  koneksi otomatis yang selalu menyala. Saat aktif, giliran kursi Muse menjadi
-                  permintaan pending untuk dijawab agen Muse utamamu di chat utama.
+                  Sambungan manual berbasis kode 8 karakter (berlaku 30 menit, bisa dipakai
+                  berkali-kali selama masih aktif), bukan koneksi otomatis yang selalu menyala.
+                  Saat aktif, giliran kursi Muse menjadi permintaan pending untuk dijawab agen Muse
+                  utamamu di chat utama.
                 </p>
               </div>
               <span

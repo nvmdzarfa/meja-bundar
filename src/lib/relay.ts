@@ -91,13 +91,6 @@ export function validateRelayCode(
   if (!relay.activeCodeHash) {
     return { valid: false, reason: "Belum ada kode relay aktif.", status: 401 };
   }
-  if (relay.codeUsedAt) {
-    return {
-      valid: false,
-      reason: "Kode relay sudah pernah dipakai (sekali pakai).",
-      status: 401,
-    };
-  }
   if (!relay.codeExpiresAt || now > relay.codeExpiresAt) {
     return {
       valid: false,
@@ -235,9 +228,6 @@ export async function submitRelayAnswer(params: {
         status: 400,
       };
     }
-
-    // Consume single-use relay code
-    db.settings.relay.codeUsedAt = now;
 
     pending.answeredAt = now;
     const msg = db.messages.find((m) => m.id === pending.messageId);

@@ -306,7 +306,6 @@ export function toPublicSettings(settings: Settings): PublicSettings {
   const now = Date.now();
   const hasActiveCode = Boolean(
     settings.relay.activeCodeHash &&
-      !settings.relay.codeUsedAt &&
       settings.relay.codeExpiresAt &&
       settings.relay.codeExpiresAt > now
   );

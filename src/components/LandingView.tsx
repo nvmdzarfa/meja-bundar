@@ -729,9 +729,9 @@ export function LandingView({ initialSettings, initialSeats }: LandingViewProps)
                 </div>
                 <p className="mt-1.5 text-sm leading-relaxed text-[#3F3F46]">
                   Jika ingin kursi {muse?.displayName ?? "Muse"} dijawab oleh agen Muse utamamu di
-                  luar aplikasi, aktifkan Relay di Pengaturan dan buat kode 8 karakter sekali pakai
-                  (berlaku 30 menit). Ini sambungan manual berbasis kode, bukan koneksi otomatis yang
-                  selalu menyala.
+                  luar aplikasi, aktifkan Relay di Pengaturan dan buat kode 8 karakter (berlaku 30
+                  menit, bisa dipakai berkali-kali selama masih aktif). Ini sambungan manual
+                  berbasis kode, bukan koneksi otomatis yang selalu menyala.
                 </p>
               </div>
               <Link

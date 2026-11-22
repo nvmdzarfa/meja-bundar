@@ -29,7 +29,7 @@ Workspace grup chat multi-AI dalam satu meja: **1 Pemilik** berdiskusi, menugask
 Setiap kursi dapat dihubungkan langsung ke model AI nyata melalui panel **Pengaturan** di aplikasi:
 - **Gemini (Google AI Studio)** — mengambil daftar model langsung dari Gemini API.
 - **API Gateway (OpenAI-compatible)** — kompatibel dengan endpoint `/v1/models`, `/v1/chat/completions`, dan `/v1/images/generations`.
-- **Mode Relay (Muse):** Menghubungkan **Muse** ke agen eksternal melalui kode pairing 8 karakter sekali pakai (kedaluwarsa 30 menit).
+- **Mode Relay (Muse):** Menghubungkan **Muse** ke agen eksternal melalui kode pairing 8 karakter (berlaku 30 menit, dapat dipakai berulang selama aktif).
 
 API key disimpan di server/storage dan selalu dimasking saat dikirim ke frontend.
 
