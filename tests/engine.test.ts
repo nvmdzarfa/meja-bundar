@@ -20,6 +20,7 @@ import {
   setRelayEnabled,
   submitRelayAnswer,
 } from "@/lib/relay";
+import { callGeminiChat, fetchGeminiModels } from "@/lib/providers/gemini";
 import {
   getStorageMode,
   mutateDb,
@@ -444,6 +445,63 @@ describe("Meja Bundar chat engine, security, and relay", () => {
       if (prevRedisToken !== undefined) process.env.UPSTASH_REDIS_REST_TOKEN = prevRedisToken;
       else delete process.env.UPSTASH_REDIS_REST_TOKEN;
     }
+  });
+
+  it("paginates Gemini model catalog and retries transient 503 responses", async () => {
+    let chatAttempts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/v1beta/models?")) {
+          if (url.includes("pageToken=p2")) {
+            return new Response(
+              JSON.stringify({
+                models: [
+                  { name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"] },
+                ],
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          return new Response(
+            JSON.stringify({
+              models: [
+                { name: "models/gemini-4-hydrogen", supportedGenerationMethods: ["generateContent"] },
+              ],
+              nextPageToken: "p2",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        chatAttempts += 1;
+        if (chatAttempts === 1) {
+          return new Response(
+            JSON.stringify({ error: { code: 503, status: "UNAVAILABLE", message: "High demand" } }),
+            { status: 503, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: "Berhasil setelah retry." }] } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    const models = await fetchGeminiModels("AIzaTest123");
+    expect(models).toEqual(["gemini-4-hydrogen", "gemini-2.5-flash"]);
+
+    const reply = await callGeminiChat({
+      apiKey: "AIzaTest123",
+      model: "gemini-2.5-flash",
+      systemPrompt: "sys",
+      messages: [{ role: "user", content: "halo" }],
+    });
+    expect(chatAttempts).toBe(2);
+    expect(reply).toBe("Berhasil setelah retry.");
   });
 });
 

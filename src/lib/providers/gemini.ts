@@ -1,6 +1,28 @@
 import type { ChatTurnMessage } from "./gateway";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const TRANSIENT_STATUSES = new Set([429, 503]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchGeminiWithRetry(
+  url: string,
+  init: RequestInit,
+  maxRetries = 2
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const response = await fetch(url, init);
+    if (!TRANSIENT_STATUSES.has(response.status) || attempt >= maxRetries) {
+      return response;
+    }
+    const baseDelay = process.env.VITEST ? 10 : 900 * (attempt + 1);
+    await sleep(baseDelay);
+    attempt += 1;
+  }
+}
 
 function extractGoogleError(rawText: string, status: number, statusText: string): string {
   try {
@@ -24,35 +46,56 @@ export async function fetchGeminiModels(apiKey: string): Promise<string[]> {
     throw new Error("API key Gemini belum diisi.");
   }
 
-  const url = `${GEMINI_API_BASE}/models?key=${encodeURIComponent(trimmedKey)}`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const collected: string[] = [];
+  let pageToken: string | undefined;
 
-  const rawText = await response.text();
-  if (!response.ok) {
-    throw new Error(extractGoogleError(rawText, response.status, response.statusText));
-  }
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams({
+      key: trimmedKey,
+      pageSize: "100",
+    });
+    if (pageToken) {
+      params.set("pageToken", pageToken);
+    }
 
-  const parsed = JSON.parse(rawText) as {
-    models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
-  };
+    const url = `${GEMINI_API_BASE}/models?${params.toString()}`;
+    const response = await fetchGeminiWithRetry(
+      url,
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(20_000),
+      },
+      1
+    );
 
-  const models = (parsed.models ?? [])
-    .filter((m) => {
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(extractGoogleError(rawText, response.status, response.statusText));
+    }
+
+    const parsed = JSON.parse(rawText) as {
+      models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+      nextPageToken?: string;
+    };
+
+    for (const m of parsed.models ?? []) {
       const methods = m.supportedGenerationMethods ?? [];
-      return (
+      if (
         methods.length === 0 ||
         methods.includes("generateContent") ||
         methods.includes("predict")
-      );
-    })
-    .map((m) => (m.name ?? "").replace(/^models\//, ""))
-    .filter(Boolean);
+      ) {
+        const clean = (m.name ?? "").replace(/^models\//, "");
+        if (clean) collected.push(clean);
+      }
+    }
 
-  return Array.from(new Set(models));
+    if (!parsed.nextPageToken) break;
+    pageToken = parsed.nextPageToken;
+  }
+
+  return Array.from(new Set(collected));
 }
 
 export async function callGeminiChat(params: {
@@ -75,7 +118,7 @@ export async function callGeminiChat(params: {
     parts: [{ text: m.content }],
   }));
 
-  const response = await fetch(url, {
+  const response = await fetchGeminiWithRetry(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -131,15 +174,19 @@ export async function callGeminiImage(params: {
     const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(cleanModel)}:predict?key=${encodeURIComponent(
       params.apiKey.trim()
     )}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        instances: [{ prompt: params.prompt }],
-        parameters: { sampleCount: 1 },
-      }),
-      signal: AbortSignal.timeout(90_000),
-    });
+    const response = await fetchGeminiWithRetry(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt: params.prompt }],
+          parameters: { sampleCount: 1 },
+        }),
+        signal: AbortSignal.timeout(90_000),
+      },
+      1
+    );
 
     const rawText = await response.text();
     if (!response.ok) {
@@ -162,17 +209,21 @@ export async function callGeminiImage(params: {
   const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(cleanModel)}:generateContent?key=${encodeURIComponent(
     params.apiKey.trim()
   )}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: params.prompt }] }],
-      generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"],
-      },
-    }),
-    signal: AbortSignal.timeout(90_000),
-  });
+  const response = await fetchGeminiWithRetry(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: params.prompt }] }],
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"],
+        },
+      }),
+      signal: AbortSignal.timeout(90_000),
+    },
+    1
+  );
 
   const rawText = await response.text();
   if (!response.ok) {
