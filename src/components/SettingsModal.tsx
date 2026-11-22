@@ -74,6 +74,8 @@ export function SettingsModal({
 
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
+  const [onlyFreeGateway, setOnlyFreeGateway] = useState(false);
 
   const prevOpenRef = React.useRef(false);
 
@@ -100,6 +102,8 @@ export function SettingsModal({
     setGeminiFeedback(null);
     setRelayFeedback(null);
     setConfirmClear(false);
+    setModelSearch("");
+    setOnlyFreeGateway(false);
   }, [open, settings, seats]);
 
   useEffect(() => {
@@ -366,6 +370,23 @@ export function SettingsModal({
     }
   }
 
+  const isFreeModel = (id: string) =>
+    id.endsWith(":free") || id === "openrouter/free";
+  const sortedGatewayModels = [
+    ...lastGatewayModels.filter(isFreeModel),
+    ...lastGatewayModels.filter((m) => !isFreeModel(m)),
+  ];
+  const freeGatewayCount = sortedGatewayModels.filter(isFreeModel).length;
+  const searchNeedle = modelSearch.trim().toLowerCase();
+  const filteredGatewayModels = sortedGatewayModels.filter((m) => {
+    if (onlyFreeGateway && !isFreeModel(m)) return false;
+    if (searchNeedle && !m.toLowerCase().includes(searchNeedle)) return false;
+    return true;
+  });
+  const filteredGeminiModels = lastGeminiModels.filter((m) =>
+    searchNeedle ? m.toLowerCase().includes(searchNeedle) : true
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-black/50"
@@ -518,51 +539,86 @@ export function SettingsModal({
             </div>
 
             {(lastGeminiModels.length > 0 || lastGatewayModels.length > 0) && (
-              <div className="rounded-xl border border-[#E2DDD5] bg-[#FAF8F5] p-3 space-y-2">
-                <p className="text-xs font-semibold text-[#18181B]">
-                  Terapkan 1 model ke semua kursi teks (kecuali Visual):
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {lastGeminiModels.length > 0 && (
-                    <select
-                      aria-label="Terapkan model Gemini ke semua kursi teks"
-                      defaultValue=""
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          applyModelToAllTextSeats("gemini", e.target.value);
-                          e.target.value = "";
-                        }
-                      }}
-                      className="max-w-full rounded-lg border border-[#D6D0C6] bg-white px-2.5 py-1.5 font-mono text-xs text-[#18181B]"
-                    >
-                      <option value="">-- Terapkan model Gemini --</option>
-                      {lastGeminiModels.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+              <div className="rounded-xl border border-[#E2DDD5] bg-[#FAF8F5] p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="model-catalog-search"
+                    className="text-xs font-semibold text-[#18181B]"
+                  >
+                    Filter daftar model ({lastGatewayModels.length + lastGeminiModels.length} total):
+                  </label>
+                  {freeGatewayCount > 0 && (
+                    <label className="inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-lg border border-[#A7F3D0] bg-[#ECFDF5] px-2.5 py-1 text-xs font-semibold text-[#065F46]">
+                      <input
+                        type="checkbox"
+                        checked={onlyFreeGateway}
+                        onChange={(e) => setOnlyFreeGateway(e.target.checked)}
+                        className="h-4 w-4 accent-[#065F46]"
+                      />
+                      <span>Hanya model :free ({freeGatewayCount})</span>
+                    </label>
                   )}
-                  {lastGatewayModels.length > 0 && (
-                    <select
-                      aria-label="Terapkan model Gateway ke semua kursi teks"
-                      defaultValue=""
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          applyModelToAllTextSeats("gateway", e.target.value);
-                          e.target.value = "";
-                        }
-                      }}
-                      className="max-w-full rounded-lg border border-[#D6D0C6] bg-white px-2.5 py-1.5 font-mono text-xs text-[#18181B]"
-                    >
-                      <option value="">-- Terapkan model Gateway --</option>
-                      {lastGatewayModels.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
+                </div>
+
+                <input
+                  id="model-catalog-search"
+                  type="search"
+                  placeholder="Cari nama model (mis. deepseek, qwen, llama, free)..."
+                  value={modelSearch}
+                  onChange={(e) => setModelSearch(e.target.value)}
+                  className="w-full rounded-lg border border-[#D6D0C6] bg-white px-3 py-2 text-xs text-[#18181B]"
+                />
+
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-[#18181B]">
+                    Terapkan 1 model ke semua kursi teks (kecuali Visual):
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {lastGeminiModels.length > 0 && (
+                      <select
+                        aria-label="Terapkan model Gemini ke semua kursi teks"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            applyModelToAllTextSeats("gemini", e.target.value);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="max-w-full rounded-lg border border-[#D6D0C6] bg-white px-2.5 py-1.5 font-mono text-xs text-[#18181B]"
+                      >
+                        <option value="">
+                          -- Terapkan model Gemini ({filteredGeminiModels.length}) --
                         </option>
-                      ))}
-                    </select>
-                  )}
+                        {filteredGeminiModels.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {lastGatewayModels.length > 0 && (
+                      <select
+                        aria-label="Terapkan model Gateway ke semua kursi teks"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            applyModelToAllTextSeats("gateway", e.target.value);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="max-w-full rounded-lg border border-[#D6D0C6] bg-white px-2.5 py-1.5 font-mono text-xs text-[#18181B]"
+                      >
+                        <option value="">
+                          -- Terapkan model Gateway ({filteredGatewayModels.length}) --
+                        </option>
+                        {filteredGatewayModels.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -574,7 +630,9 @@ export function SettingsModal({
                 const currentModel =
                   seat.source === "gemini" ? seat.geminiModel : seat.gatewayModel;
                 const modelCatalog =
-                  seat.source === "gemini" ? lastGeminiModels : lastGatewayModels;
+                  seat.source === "gemini" ? lastGeminiModels : sortedGatewayModels;
+                const visibleCatalog =
+                  seat.source === "gemini" ? filteredGeminiModels : filteredGatewayModels;
                 const hasMissingWarning =
                   usesExternalModel &&
                   Boolean(currentModel.trim()) &&
@@ -665,14 +723,14 @@ export function SettingsModal({
                             id={`seat-model-${seat.id}`}
                             type="text"
                             list={
-                              modelCatalog.length > 0
+                              visibleCatalog.length > 0
                                 ? `datalist-${seat.id}-${seat.source}`
                                 : undefined
                             }
                             placeholder={
                               seat.source === "gemini"
-                                ? "mis. gemini-3.8-flash"
-                                : "mis. gpt-4o-mini"
+                                ? "mis. gemini-2.5-flash"
+                                : "mis. deepseek/deepseek-chat:free"
                             }
                             value={currentModel}
                             onChange={(e) =>
@@ -685,9 +743,9 @@ export function SettingsModal({
                             }
                             className="mt-1 w-full rounded-lg border border-[#D6D0C6] bg-white px-2.5 py-2 font-mono text-xs text-[#18181B]"
                           />
-                          {modelCatalog.length > 0 && (
+                          {visibleCatalog.length > 0 && (
                             <datalist id={`datalist-${seat.id}-${seat.source}`}>
-                              {modelCatalog.map((m) => (
+                              {visibleCatalog.map((m) => (
                                 <option key={m} value={m} />
                               ))}
                             </datalist>
@@ -715,8 +773,15 @@ export function SettingsModal({
                           }}
                           className="max-w-full rounded-lg border border-[#D6D0C6] bg-white px-2 py-1 font-mono text-xs text-[#18181B]"
                         >
-                          <option value="">-- pilih dari daftar hasil fetch --</option>
-                          {modelCatalog.map((m) => (
+                          <option value="">
+                            -- pilih dari daftar ({visibleCatalog.length} model) --
+                          </option>
+                          {Boolean(currentModel) &&
+                            modelCatalog.includes(currentModel) &&
+                            !visibleCatalog.includes(currentModel) && (
+                              <option value={currentModel}>{currentModel}</option>
+                            )}
+                          {visibleCatalog.map((m) => (
                             <option key={m} value={m}>
                               {m}
                             </option>
